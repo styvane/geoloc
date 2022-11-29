@@ -14,3 +14,9 @@ mod command;
 mod error;
 
 pub use self::error::Error;
+
+/// Result Type.
+///
+/// It's an alias for the `std::result::Result` type with the error
+/// type [`Error`](crate::Error).
+pub type Result<T> = std::result::Result<T, crate::Error>;
