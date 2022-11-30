@@ -11,7 +11,9 @@
 )]
 
 mod command;
+pub mod database;
 mod error;
+pub mod protocol;
 
 pub use self::error::Error;
 
