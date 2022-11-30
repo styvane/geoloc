@@ -4,8 +4,9 @@
 
 use std::fs::File;
 use std::path::Path;
+use std::str;
 
-use csv::{Reader, ReaderBuilder, Trim};
+use csv::{ByteRecord, Reader, ReaderBuilder, Trim};
 
 use super::protocol::Protocol;
 use crate::{Error, Result};
@@ -50,16 +51,19 @@ where
         "OK"
     }
 
-    fn lookup(&mut self, ip: u32) -> Result<String> {
+    fn lookup(&mut self, ip: &[u8]) -> Result<String> {
         let reader = self.reader.as_mut().ok_or(Error::UnloadedDatabaseError)?;
-
-        for result in reader.records() {
-            let record = result?;
-            let Some(start): Option<u32> = record.get(0).iter().filter_map(|x| x.parse().ok()).next() else { continue};
-            let Some(end): Option<u32> = record.get(1).iter().filter_map(|x| x.parse().ok()).next() else { continue};
+        let mut record = ByteRecord::new();
+        while reader.read_byte_record(&mut record)? {
+            let Some(start) = record.get(0) else { continue};
+            let Some(end) =  record.get(1) else { continue};
 
             if ip >= start && ip <= end {
-                return Ok(format!("{},{}", &record[2], &record[5]));
+                return Ok(format!(
+                    "{},{}",
+                    str::from_utf8(&record[2]).map_err(|_| Error::ParseError)?,
+                    str::from_utf8(&record[5]).map_err(|_| Error::ParseError)?,
+                ));
             }
         }
         Err(Error::LookupError)
@@ -86,9 +90,10 @@ mod tests {
     fn test_ip_lookup() {
         let mut file = NamedTempFile::new().expect("failed to create tempfile");
 
-        struct Test {
-            name: &'static str,
-            want: &'static str,
+        struct Test<'a> {
+            name: &'a str,
+            want: &'a str,
+            ip: &'a [u8],
             ok: bool,
         }
 
@@ -105,18 +110,20 @@ mod tests {
         let tests = &[
             Test {
                 name: "ok",
-                want: "AU,Melbourne",
+                want: "CN,Fuzhou",
+                ip: b"16777472",
                 ok: true,
             },
             Test {
                 name: "nok",
                 want: "",
+                ip: b"16778940",
                 ok: false,
             },
         ];
 
         for tt in tests {
-            let resp = db.lookup(16778940);
+            let resp = db.lookup(tt.ip);
 
             match resp {
                 Ok(value) if tt.ok => {

@@ -13,5 +13,5 @@ pub trait Protocol {
     fn exit(&self) -> &str;
 
     /// Lookup the IP address in the database.
-    fn lookup(&mut self, ip: u32) -> Result<String>;
+    fn lookup(&mut self, ip: &[u8]) -> Result<String>;
 }
