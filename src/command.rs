@@ -24,11 +24,18 @@ pub enum Command {
 impl TryFrom<String> for Command {
     type Error = Error;
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let cmd = match value.as_str() {
+        value.parse()
+    }
+}
+
+impl FromStr for Command {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let cmd = match s {
             "LOAD" => Self::Load,
             "EXIT" => Self::Exit,
             _ => {
-                let ip = value
+                let ip = s
                     .strip_prefix("LOOKUP")
                     .iter()
                     .filter_map(|ip| Ipv4Addr::from_str(ip.trim()).ok())
@@ -44,4 +51,25 @@ impl TryFrom<String> for Command {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use quickcheck_macros::quickcheck;
+
+    use super::*;
+
+    #[quickcheck]
+    fn create_lookup_command_from_valid_input_successfully(ips: Vec<Ipv4Addr>) -> bool {
+        let count = ips.len();
+        ips.into_iter()
+            .filter_map(|ip| Command::try_from(format!("LOOKUP {ip}")).ok())
+            .count()
+            == count
+    }
+
+    #[quickcheck]
+    fn cannot_create_lookup_command_from_invalid_input(ips: Vec<String>) -> bool {
+        ips.into_iter()
+            .filter_map(|ip| Command::try_from(format!("LOOKUP {ip}")).ok())
+            .count()
+            == 0
+    }
+}
