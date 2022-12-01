@@ -63,17 +63,7 @@ where
                 .map_err(|_| Error::ParseError)?
                 .parse()
                 .map_err(|_| Error::ParseError)?;
-            table.push((
-                start,
-                end,
-                format!(
-                    "{},{}",
-                    str::from_utf8(&record[2]).map_err(|_| Error::ParseError)?,
-                    str::from_utf8(&record[5]).map_err(|_| Error::ParseError)?,
-                )
-                .as_bytes()
-                .to_vec(),
-            ));
+            table.push((start, end, [&record[2], b",", &record[5]].concat()));
         }
         self.iptable = table;
         Ok(())
