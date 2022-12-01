@@ -2,25 +2,21 @@
 //!
 //! This module defines the database data structures.
 
-use std::fs::File;
 use std::path::Path;
 use std::str;
 
-use csv::{ByteRecord, Position, Reader, ReaderBuilder, Trim, WriterBuilder};
+use csv::{ByteRecord, ReaderBuilder, Trim};
 
 use super::protocol::Protocol;
 use crate::{command::Command, Error, Result};
 
 /// Database type.
 pub struct Database<P> {
-    /// The path to the underline file.
+    /// Path to the database file.
     path: P,
 
-    /// A reader
-    reader: Option<Reader<File>>,
-
-    /// Current row position.
-    position: u64,
+    /// IP address range table.
+    iptable: Vec<(u32, u32, Vec<u8>)>,
 }
 
 impl<P> Database<P>
@@ -35,8 +31,7 @@ where
 
         Ok(Self {
             path,
-            reader: None,
-            position: 0,
+            iptable: vec![],
         })
     }
 
@@ -49,6 +44,40 @@ where
         };
         Ok(data)
     }
+    /// Caches the subset of columns required.
+    pub fn populate_cache(&mut self) -> Result<()> {
+        let mut reader = ReaderBuilder::new()
+            .trim(Trim::All)
+            .has_headers(false)
+            .from_path(self.path.as_ref())?;
+
+        let mut record = ByteRecord::new();
+        let mut table = vec![];
+
+        while reader.read_byte_record(&mut record)? {
+            let start: u32 = str::from_utf8(&record[0])
+                .map_err(|_| Error::ParseError)?
+                .parse()
+                .map_err(|_| Error::ParseError)?;
+            let end: u32 = str::from_utf8(&record[1])
+                .map_err(|_| Error::ParseError)?
+                .parse()
+                .map_err(|_| Error::ParseError)?;
+            table.push((
+                start,
+                end,
+                format!(
+                    "{},{}",
+                    str::from_utf8(&record[2]).map_err(|_| Error::ParseError)?,
+                    str::from_utf8(&record[5]).map_err(|_| Error::ParseError)?,
+                )
+                .as_bytes()
+                .to_vec(),
+            ));
+        }
+        self.iptable = table;
+        Ok(())
+    }
 }
 
 impl<P> Protocol for Database<P>
@@ -56,13 +85,7 @@ where
     P: AsRef<Path>,
 {
     fn load(&mut self) -> Result<&str> {
-        let reader = ReaderBuilder::new()
-            .buffer_capacity(4 * (1 << 10))
-            .trim(Trim::All)
-            .has_headers(false)
-            .from_path(self.path.as_ref())?;
-        self.reader.replace(reader);
-
+        self.populate_cache()?;
         Ok("OK")
     }
 
@@ -71,78 +94,15 @@ where
     }
 
     fn lookup(&mut self, ip: u32) -> Result<String> {
-        let reader = self.reader.as_mut().ok_or(Error::UnloadedDatabaseError)?;
-        let mut record = ByteRecord::new();
-
-        let start_position = self.position;
-
-        let mut was_reset = false;
-        if reader.is_done() {
-            reader.seek(Position::new())?;
-            was_reset = true;
-        }
-
-        let line = self.position;
-
-        loop {
-            if reader.is_done() && !was_reset && line > 0 {
-                reader.seek(Position::new())?;
-                was_reset = true;
-            }
-
-            reader.read_byte_record(&mut record)?;
-            self.position = record.position().ok_or(Error::ParseError)?.line();
-            let Some(start) = record.get(0) else { continue};
-            let Some(end) =  record.get(1) else { continue};
-
-            let start: u32 = str::from_utf8(start)
-                .map_err(|_| Error::ParseError)?
-                .parse()
-                .map_err(|_| Error::ParseError)?;
-            let end: u32 = str::from_utf8(end)
-                .map_err(|_| Error::ParseError)?
-                .parse()
-                .map_err(|_| Error::ParseError)?;
-
-            if ip >= start && ip <= end {
-                return Ok(format!(
-                    "{},{}",
-                    str::from_utf8(&record[2]).map_err(|_| Error::ParseError)?,
-                    str::from_utf8(&record[3]).map_err(|_| Error::ParseError)?,
-                ));
-            }
-
-            if was_reset && start_position == self.position {
-                return Err(Error::LookupError);
+        for (start, end, v) in &self.iptable {
+            if ip >= *start && ip <= *end {
+                return str::from_utf8(v)
+                    .map_err(|_| Error::ParseError)
+                    .map(|s| s.to_string());
             }
         }
+        Err(Error::LookupError)
     }
-}
-
-/// Select the subset of columns required.
-pub fn select(
-    infile: impl AsRef<Path>,
-    outfile: impl AsRef<Path>,
-    columns: &[usize],
-) -> Result<()> {
-    let mut writer = WriterBuilder::new().from_path(outfile.as_ref())?;
-    let mut reader = ReaderBuilder::new()
-        .trim(Trim::All)
-        .has_headers(false)
-        .from_path(infile.as_ref())?;
-    let mut record = ByteRecord::new();
-    while reader.read_byte_record(&mut record)? {
-        record = ByteRecord::from_iter(
-            record
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| columns.contains(i))
-                .map(|(_, v)| v),
-        );
-        writer.write_byte_record(&record)?;
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -158,14 +118,11 @@ mod tests {
         let file = NamedTempFile::new().expect("failed to create tempfile");
         let mut db = Database::new(file.path()).expect("failed to create db");
         assert!(db.load().is_ok(), "failed to load db");
-        assert!(db.reader.is_some(), "db reader not is None");
     }
 
     #[test]
     fn test_ip_lookup() {
         let mut file = NamedTempFile::new().expect("failed to create tempfile");
-        let outfile = NamedTempFile::new().expect("failed to create tempfile");
-
         struct Test<'a> {
             name: &'a str,
             want: &'a str,
@@ -180,8 +137,7 @@ mod tests {
 "16779264","16781311","CN","China","Guangdong","Guangzhou","23.116670","113.250000"
 "16781312","16785407","JP","Japan","Tokyo","Tokyo","35.689506","139.691700""#).expect("failed to write data");
         file.flush().expect("failed to flush");
-        select(file, &outfile, &[0, 1, 2, 5]).expect("failed to select field");
-        let mut db = Database::new(outfile.path()).expect("failed to create db");
+        let mut db = Database::new(file.path()).expect("failed to create db");
         db.load().expect("failed to load db");
 
         let tests = &[

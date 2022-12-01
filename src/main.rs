@@ -1,9 +1,8 @@
 use std::env;
 
 use geoloc::command::Command;
-use geoloc::database::{self, Database};
+use geoloc::database::Database;
 use rustyline::Editor;
-use tempfile::NamedTempFile;
 
 fn main() {
     if env::args().len() != 2 {
@@ -11,9 +10,7 @@ fn main() {
     }
 
     let Some(path) = env::args().nth(1) else { panic!("invalid path") };
-    let outfile = NamedTempFile::new().expect("failed to create tempfile");
-    database::select(path, &outfile, &[0, 1, 2, 5]).expect("failed to select field");
-    let mut db = Database::new(outfile).expect("failed to create db");
+    let mut db = Database::new(path).expect("failed to create db");
     let mut rl = Editor::<()>::new().expect("failed to create line editor");
     println!("READY");
     while let Ok(cmd) = rl.readline("> ") {
