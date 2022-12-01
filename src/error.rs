@@ -28,4 +28,8 @@ pub enum Error {
     /// The record lookup error.
     #[error("Record not found")]
     LookupError,
+
+    /// The IO related error.
+    #[error(transparent)]
+    IOError(#[from] std::io::Error),
 }

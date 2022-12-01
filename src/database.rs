@@ -6,7 +6,7 @@ use std::fs::File;
 use std::path::Path;
 use std::str;
 
-use csv::{ByteRecord, Position, Reader, ReaderBuilder, Trim};
+use csv::{ByteRecord, Position, Reader, ReaderBuilder, Trim, WriterBuilder};
 
 use super::protocol::Protocol;
 use crate::{command::Command, Error, Result};
@@ -32,6 +32,7 @@ where
         if !path.as_ref().exists() {
             return Err(Error::InvalidDatabasePathError);
         }
+
         Ok(Self {
             path,
             reader: None,
@@ -56,6 +57,7 @@ where
 {
     fn load(&mut self) -> Result<&str> {
         let reader = ReaderBuilder::new()
+            .buffer_capacity(4 * (1 << 10))
             .trim(Trim::All)
             .has_headers(false)
             .from_path(self.path.as_ref())?;
@@ -89,7 +91,6 @@ where
             }
 
             reader.read_byte_record(&mut record)?;
-
             self.position = record.position().ok_or(Error::ParseError)?.line();
             let Some(start) = record.get(0) else { continue};
             let Some(end) =  record.get(1) else { continue};
@@ -107,7 +108,7 @@ where
                 return Ok(format!(
                     "{},{}",
                     str::from_utf8(&record[2]).map_err(|_| Error::ParseError)?,
-                    str::from_utf8(&record[5]).map_err(|_| Error::ParseError)?,
+                    str::from_utf8(&record[3]).map_err(|_| Error::ParseError)?,
                 ));
             }
 
@@ -116,6 +117,32 @@ where
             }
         }
     }
+}
+
+/// Select the subset of columns required.
+pub fn select(
+    infile: impl AsRef<Path>,
+    outfile: impl AsRef<Path>,
+    columns: &[usize],
+) -> Result<()> {
+    let mut writer = WriterBuilder::new().from_path(outfile.as_ref())?;
+    let mut reader = ReaderBuilder::new()
+        .trim(Trim::All)
+        .has_headers(false)
+        .from_path(infile.as_ref())?;
+    let mut record = ByteRecord::new();
+    while reader.read_byte_record(&mut record)? {
+        record = ByteRecord::from_iter(
+            record
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| columns.contains(i))
+                .map(|(_, v)| v),
+        );
+        writer.write_byte_record(&record)?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -137,6 +164,7 @@ mod tests {
     #[test]
     fn test_ip_lookup() {
         let mut file = NamedTempFile::new().expect("failed to create tempfile");
+        let outfile = NamedTempFile::new().expect("failed to create tempfile");
 
         struct Test<'a> {
             name: &'a str,
@@ -152,7 +180,8 @@ mod tests {
 "16779264","16781311","CN","China","Guangdong","Guangzhou","23.116670","113.250000"
 "16781312","16785407","JP","Japan","Tokyo","Tokyo","35.689506","139.691700""#).expect("failed to write data");
         file.flush().expect("failed to flush");
-        let mut db = Database::new(file.path()).expect("failed to create db");
+        select(file, &outfile, &[0, 1, 2, 5]).expect("failed to select field");
+        let mut db = Database::new(outfile.path()).expect("failed to create db");
         db.load().expect("failed to load db");
 
         let tests = &[

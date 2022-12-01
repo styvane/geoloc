@@ -14,8 +14,8 @@ opt-level = 3
 csv = "1.1"
 rustyline = "10.0.0"
 thiserror = "1.0"
+tempfile = "3"
 
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
-tempfile = "3"
