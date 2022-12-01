@@ -18,6 +18,9 @@ pub struct Database<P> {
 
     /// A reader
     reader: Option<Reader<File>>,
+
+    /// Current row position.
+    position: u64,
 }
 
 impl<P> Database<P>
@@ -29,7 +32,11 @@ where
         if !path.as_ref().exists() {
             return Err(Error::InvalidDatabasePathError);
         }
-        Ok(Self { path, reader: None })
+        Ok(Self {
+            path,
+            reader: None,
+            position: 0,
+        })
     }
 
     /// Responds to requests
@@ -63,11 +70,27 @@ where
 
     fn lookup(&mut self, ip: u32) -> Result<String> {
         let reader = self.reader.as_mut().ok_or(Error::UnloadedDatabaseError)?;
-        reader.seek(Position::new())?;
         let mut record = ByteRecord::new();
 
-        while reader.read_byte_record(&mut record)? {
-            println!("{:?}", &record);
+        let start_position = self.position;
+
+        let mut was_reset = false;
+        if reader.is_done() {
+            reader.seek(Position::new())?;
+            was_reset = true;
+        }
+
+        let line = self.position;
+
+        loop {
+            if reader.is_done() && !was_reset && line > 0 {
+                reader.seek(Position::new())?;
+                was_reset = true;
+            }
+
+            reader.read_byte_record(&mut record)?;
+
+            self.position = record.position().ok_or(Error::ParseError)?.line();
             let Some(start) = record.get(0) else { continue};
             let Some(end) =  record.get(1) else { continue};
 
@@ -87,8 +110,11 @@ where
                     str::from_utf8(&record[5]).map_err(|_| Error::ParseError)?,
                 ));
             }
+
+            if was_reset && start_position == self.position {
+                return Err(Error::LookupError);
+            }
         }
-        Err(Error::LookupError)
     }
 }
 
