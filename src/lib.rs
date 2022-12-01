@@ -10,7 +10,7 @@
     clippy::missing_const_for_fn
 )]
 
-mod command;
+pub mod command;
 pub mod database;
 mod error;
 pub mod protocol;

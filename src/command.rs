@@ -9,7 +9,7 @@ use crate::Error;
 
 /// Command type.
 #[non_exhaustive]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     /// Load database into memory.
     Load,
@@ -42,7 +42,8 @@ impl FromStr for Command {
                     .next()
                     .ok_or(Error::UnsupportedCommand)?;
 
-                Self::Lookup(ip.into())
+                let ip: u32 = ip.into();
+                Self::Lookup(ip)
             }
         };
 

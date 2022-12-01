@@ -6,10 +6,10 @@ use std::fs::File;
 use std::path::Path;
 use std::str;
 
-use csv::{ByteRecord, Reader, ReaderBuilder, Trim};
+use csv::{ByteRecord, Position, Reader, ReaderBuilder, Trim};
 
 use super::protocol::Protocol;
-use crate::{Error, Result};
+use crate::{command::Command, Error, Result};
 
 /// Database type.
 pub struct Database<P> {
@@ -31,6 +31,16 @@ where
         }
         Ok(Self { path, reader: None })
     }
+
+    /// Responds to requests
+    pub fn respond(&mut self, cmd: &Command) -> Result<String> {
+        let data = match cmd {
+            Command::Load => self.load()?.into(),
+            Command::Exit => self.exit().into(),
+            Command::Lookup(ip) => self.lookup(*ip)?,
+        };
+        Ok(data)
+    }
 }
 
 impl<P> Protocol for Database<P>
@@ -51,12 +61,24 @@ where
         "OK"
     }
 
-    fn lookup(&mut self, ip: &[u8]) -> Result<String> {
+    fn lookup(&mut self, ip: u32) -> Result<String> {
         let reader = self.reader.as_mut().ok_or(Error::UnloadedDatabaseError)?;
+        reader.seek(Position::new())?;
         let mut record = ByteRecord::new();
+
         while reader.read_byte_record(&mut record)? {
+            println!("{:?}", &record);
             let Some(start) = record.get(0) else { continue};
             let Some(end) =  record.get(1) else { continue};
+
+            let start: u32 = str::from_utf8(start)
+                .map_err(|_| Error::ParseError)?
+                .parse()
+                .map_err(|_| Error::ParseError)?;
+            let end: u32 = str::from_utf8(end)
+                .map_err(|_| Error::ParseError)?
+                .parse()
+                .map_err(|_| Error::ParseError)?;
 
             if ip >= start && ip <= end {
                 return Ok(format!(
@@ -93,7 +115,7 @@ mod tests {
         struct Test<'a> {
             name: &'a str,
             want: &'a str,
-            ip: &'a [u8],
+            ip: u32,
             ok: bool,
         }
 
@@ -111,13 +133,13 @@ mod tests {
             Test {
                 name: "ok",
                 want: "CN,Fuzhou",
-                ip: b"16777472",
+                ip: 16777472,
                 ok: true,
             },
             Test {
                 name: "nok",
                 want: "",
-                ip: b"16778940",
+                ip: 16778940,
                 ok: false,
             },
         ];
