@@ -52,6 +52,7 @@ where
             .from_path(self.path.as_ref())?;
 
         let mut record = ByteRecord::new();
+
         let mut table = vec![];
 
         while reader.read_byte_record(&mut record)? {
@@ -63,8 +64,10 @@ where
                 .map_err(|_| Error::ParseError)?
                 .parse()
                 .map_err(|_| Error::ParseError)?;
-            table.push((start, end, [&record[2], b",", &record[5]].concat()));
+            let country_city = [&record[2], b",", &record[5]].concat();
+            table.push((start, end, country_city));
         }
+
         self.iptable = table;
         Ok(())
     }
