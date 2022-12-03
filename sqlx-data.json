@@ -1,0 +1,27 @@
+{
+  "db": "SQLite",
+  "39578de20dd35418325d9e1a6e731269b47ed28ec0c36d7ede1c6ddbea1560bb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "country_code",
+          "ordinal": 0,
+          "type_info": "Blob"
+        },
+        {
+          "name": "city",
+          "ordinal": 1,
+          "type_info": "Blob"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT country_code, city\n                FROM iptable WHERE $1 BETWEEN start AND end\n            "
+  }
+}

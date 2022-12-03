@@ -20,7 +20,7 @@ async-trait = "0.1.59"
 
 [dependencies.sqlx]
 version = "0.6.2"
-features = ["macros", "migrate", "sqlite", "runtime-async-std-rustls"]
+features = ["macros", "migrate", "sqlite", "runtime-async-std-rustls", "offline"]
 
 [dev-dependencies]
 quickcheck = "1"
