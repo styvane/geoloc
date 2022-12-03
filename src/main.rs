@@ -1,4 +1,5 @@
 use std::env;
+use std::path::Path;
 
 use geoloc::command::Command;
 use geoloc::database::Database;
@@ -11,16 +12,29 @@ async fn main() {
     }
 
     let Some(path) = env::args().nth(1) else { panic!("invalid path") };
+    let path = Path::new(&path);
+    if !path.exists() {
+        panic!("db file does not exist")
+    }
+
     let mut db = Database::new(path);
 
     let mut rl = Editor::<()>::new().expect("failed to create line editor");
+
     println!("READY");
+
     while let Ok(cmd) = rl.readline("> ") {
-        let cmd = Command::try_from(cmd).expect("failed to create command");
-        let response = db.respond(&cmd).await.expect("failed to respond");
-        println!("{response}");
-        if cmd == Command::Exit {
-            break;
+        match Command::try_from(cmd) {
+            Err(_) => println!("ERR"),
+            Ok(cmd) => match db.respond(&cmd).await {
+                Ok(resp) => {
+                    println!("{resp}");
+                    if cmd == Command::Exit {
+                        break;
+                    }
+                }
+                Err(_) => println!("ERR"),
+            },
         }
     }
 }

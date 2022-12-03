@@ -11,16 +11,16 @@ version = "0.1.0"
 opt-level = 3
 
 [dependencies]
-csv = "1.1"
-rustyline = "10.0.0"
-thiserror = "1.0"
-tempfile = "3"
 async-std = {version = "1.12.0", features = ["attributes"]}
 async-trait = "0.1.59"
+csv = "1.1"
+rustyline = "10.0.0"
+tempfile = "3"
+thiserror = "1.0"
 
 [dependencies.sqlx]
-version = "0.6.2"
 features = ["macros", "migrate", "sqlite", "runtime-async-std-rustls", "offline"]
+version = "0.6.2"
 
 [dev-dependencies]
 quickcheck = "1"
