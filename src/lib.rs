@@ -22,3 +22,10 @@ pub use self::error::Error;
 /// It's an alias for the `std::result::Result` type with the error
 /// type [`Error`](crate::Error).
 pub type Result<T> = std::result::Result<T, crate::Error>;
+
+/// The Query trait specifies the query operations.
+#[async_trait::async_trait]
+pub trait QueryDriver {
+    /// Find ip address info.
+    async fn find_ip(&self, ip: u32) -> Result<String>;
+}

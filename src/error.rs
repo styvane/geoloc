@@ -32,4 +32,8 @@ pub enum Error {
     /// The IO related error.
     #[error(transparent)]
     IOError(#[from] std::io::Error),
+
+    /// The Sqlx related error.
+    #[error(transparent)]
+    SqlxError(#[from] sqlx::Error),
 }
