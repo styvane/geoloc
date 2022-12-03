@@ -12,8 +12,8 @@ def insert_rows(conn, rows):
     """
     for row in rows:
         try:
-            row = (int(row[0]), int(row[1]), row[2].encode("utf-*8"), row[5].encode("utf-8"))
-        except:
+            row = (int(row[0]), int(row[1]), row[2].encode(), row[5].encode())
+        except ValueError:
             continue
         conn.execute("INSERT INTO iptable (start, end, country_code, city) VALUES(?, ?, ?, ?)", row)
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         exit(1)
         
     with open(sys.argv[1]) as f:
-        conn = sqlite3.connect("test.db")
+        conn = sqlite3.connect("geoloc.db")
         reader = csv.reader(f)
         if create_table(conn):
             with conn:
