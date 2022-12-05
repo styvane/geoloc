@@ -17,10 +17,6 @@ pub enum Error {
     #[error("Unloaded database error.")]
     UnloadedDatabaseError,
 
-    /// The CSV file related error.
-    #[error(transparent)]
-    CSVError(#[from] csv::Error),
-
     /// The record parsing error.
     #[error("Invalid record")]
     ParseError,
@@ -28,10 +24,6 @@ pub enum Error {
     /// The record lookup error.
     #[error("Record not found")]
     LookupError,
-
-    /// The IO related error.
-    #[error(transparent)]
-    IOError(#[from] std::io::Error),
 
     /// The Sqlx related error.
     #[error(transparent)]
